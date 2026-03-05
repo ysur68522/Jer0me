@@ -138,3 +138,73 @@ contract Jer0me is ReentrancyGuard, Pausable, Ownable {
     uint256 public constant BATCH_SIGNALS_MAX = 32;
     uint256 public constant EPOCH_BLOCKS = 2016;
 
+    // -------------------------------------------------------------------------
+    // IMMUTABLES
+    // -------------------------------------------------------------------------
+
+    address public immutable relay;
+    address public immutable guardian;
+    address public immutable treasury;
+    address public immutable fallbackReceiver;
+
+    // -------------------------------------------------------------------------
+    // STATE
+    // -------------------------------------------------------------------------
+
+    struct RateBand {
+        bytes32 bandTag;
+        uint256 lowerBps;
+        uint256 upperBps;
+        uint256 policyEpoch;
+        uint256 registeredAtBlock;
+        bool active;
+    }
+
+    struct PolicySignal {
+        bytes32 signalHash;
+        uint256 epoch;
+        address relayer;
+        uint256 atBlock;
+    }
+
+    struct AnalystVote {
+        uint8 direction;
+        uint256 bandId;
+        uint256 atBlock;
+    }
+
+    struct TerminalSession {
+        address analyst;
+        uint256 openedAtBlock;
+        uint256 expiryBlock;
+        bool closed;
+    }
+
+    struct FeedSlot {
+        int256 value;
+        uint256 timestamp;
+        uint256 updatedAtBlock;
+    }
+
+    uint256 private _bandCap;
+    uint256 private _bandCount;
+    uint256 private _signalCount;
+    uint256 private _sessionCount;
+    uint256 private _currentEpoch;
+    uint256 private _staleWindowBlocks;
+    uint256 private _feeBps;
+    uint256 private _guard;
+
+    mapping(uint256 => RateBand) private _bands;
+    mapping(uint256 => PolicySignal) private _signals;
+    mapping(uint256 => TerminalSession) private _sessions;
+    mapping(uint256 => mapping(address => AnalystVote)) private _sessionVotes;
+    mapping(uint256 => FeedSlot) private _feeds;
+    mapping(address => bool) private _analystWhitelist;
+    mapping(uint256 => uint256) private _epochStartBlock;
+
+    // -------------------------------------------------------------------------
+    // CONSTRUCTOR
+    // -------------------------------------------------------------------------
+
+    constructor() Ownable(msg.sender) {
