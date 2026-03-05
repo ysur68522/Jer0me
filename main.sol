@@ -558,3 +558,73 @@ contract Jer0me is ReentrancyGuard, Pausable, Ownable {
     function feeBps() external view returns (uint256) { return _feeBps; }
 
     function resolveBandForBps(uint256 bps_) external view returns (uint256 bandId, bool found) {
+        for (uint256 i = 1; i <= _bandCount; ) {
+            RateBand storage b = _bands[i];
+            if (b.active && bps_ >= b.lowerBps && bps_ <= b.upperBps) return (i, true);
+            unchecked { ++i; }
+        }
+        return (0, false);
+    }
+
+    function resolveBandsForBpsBatch(uint256[] calldata bpsList_) external view returns (
+        uint256[] memory bandIds,
+        bool[] memory found
+    ) {
+        uint256 n = bpsList_.length;
+        bandIds = new uint256[](n);
+        found = new bool[](n);
+        for (uint256 j; j < n; ) {
+            uint256 bps = bpsList_[j];
+            for (uint256 i = 1; i <= _bandCount; ) {
+                RateBand storage b = _bands[i];
+                if (b.active && bps >= b.lowerBps && bps <= b.upperBps) {
+                    bandIds[j] = i;
+                    found[j] = true;
+                    break;
+                }
+                unchecked { ++i; }
+            }
+            unchecked { ++j; }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // PURE / VIEW HELPERS
+    // -------------------------------------------------------------------------
+
+    function computeFee(uint256 amount_) external view returns (uint256) {
+        return (amount_ * _feeBps) / BPS_DENOMINATOR;
+    }
+
+    function namespaceHash() external pure returns (bytes32) { return JER0ME_NAMESPACE; }
+
+    function version() external pure returns (uint256) { return JER0ME_VERSION; }
+
+    // -------------------------------------------------------------------------
+    // BAND HISTORY & SNAPSHOTS (extended ledger)
+    // -------------------------------------------------------------------------
+
+    struct BandHistoryEntry {
+        uint256 bandId;
+        uint256 lowerBps;
+        uint256 upperBps;
+        bool active;
+        uint256 atBlock;
+    }
+
+    uint256 private _bandHistoryCount;
+    mapping(uint256 => BandHistoryEntry) private _bandHistory;
+
+    event BandHistoryAppended(uint256 indexed bandId, uint256 entryIndex, uint256 atBlock);
+
+    function _appendBandHistory(uint256 bandId_, uint256 lowerBps_, uint256 upperBps_, bool active_) internal {
+        _bandHistoryCount++;
+        _bandHistory[_bandHistoryCount] = BandHistoryEntry({
+            bandId: bandId_,
+            lowerBps: lowerBps_,
+            upperBps: upperBps_,
+            active: active_,
+            atBlock: block.number
+        });
+        emit BandHistoryAppended(bandId_, _bandHistoryCount, block.number);
+    }
