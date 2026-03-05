@@ -278,3 +278,73 @@ contract Jer0me is ReentrancyGuard, Pausable, Ownable {
                 epoch: epoch,
                 relayer: msg.sender,
                 atBlock: block.number
+            });
+            emit PolicySignalPushed(_signalCount, hashes_[i], epoch, msg.sender, block.number);
+            unchecked { ++i; }
+        }
+    }
+
+    function updateFeed(uint256 feedIndex_, int256 value_) external onlyRelay whenNotPausedContract {
+        if (feedIndex_ >= MAX_FEEDS) revert J0R_CapExceeded();
+        _feeds[feedIndex_] = FeedSlot({
+            value: value_,
+            timestamp: block.timestamp,
+            updatedAtBlock: block.number
+        });
+        emit RelayFeedUpdated(feedIndex_, value_, block.timestamp, block.number);
+    }
+
+    function registerBand(
+        bytes32 bandTag_,
+        uint256 lowerBps_,
+        uint256 upperBps_
+    ) external onlyRelay whenNotPausedContract {
+        if (lowerBps_ >= upperBps_) revert J0R_BandBoundsInvalid();
+        if (_bandCount >= _bandCap) revert J0R_CapExceeded();
+        _bandCount++;
+        _bands[_bandCount] = RateBand({
+            bandTag: bandTag_,
+            lowerBps: lowerBps_,
+            upperBps: upperBps_,
+            policyEpoch: _currentEpoch,
+            registeredAtBlock: block.number,
+            active: true
+        });
+        _appendBandHistory(_bandCount, lowerBps_, upperBps_, true);
+        emit BandRegistered(_bandCount, bandTag_, lowerBps_, upperBps_, _currentEpoch, block.number);
+    }
+
+    function advanceEpoch() external onlyRelay whenNotPausedContract {
+        uint256 prev = _currentEpoch;
+        _currentEpoch++;
+        _epochStartBlock[_currentEpoch] = block.number;
+        emit EpochAdvanced(prev, _currentEpoch, block.number);
+    }
+
+    // -------------------------------------------------------------------------
+    // EXTERNAL — GUARDIAN
+    // -------------------------------------------------------------------------
+
+    function setPaused(bool paused_) external onlyGuardian {
+        if (paused_) _pause(); else _unpause();
+        emit GuardianPauseToggled(paused_, block.number);
+    }
+
+    function setBandCap(uint256 newCap_) external onlyGuardian {
+        if (newCap_ < _bandCount) revert J0R_BandBoundsInvalid();
+        uint256 prev = _bandCap;
+        _bandCap = newCap_;
+        emit BandCapSet(prev, newCap_, block.number);
+    }
+
+    function setStaleWindow(uint256 newWindow_) external onlyGuardian {
+        if (newWindow_ > MAX_STALE_BLOCKS) revert J0R_StaleWindowTooLarge();
+        uint256 prev = _staleWindowBlocks;
+        _staleWindowBlocks = newWindow_;
+        emit StaleWindowSet(prev, newWindow_, block.number);
+    }
+
+    function setFeeBps(uint256 newBps_) external onlyGuardian {
+        if (newBps_ > MAX_FEE_BPS) revert J0R_FeeBpsTooHigh();
+        uint256 prev = _feeBps;
+        _feeBps = newBps_;
