@@ -348,3 +348,73 @@ contract Jer0me is ReentrancyGuard, Pausable, Ownable {
         if (newBps_ > MAX_FEE_BPS) revert J0R_FeeBpsTooHigh();
         uint256 prev = _feeBps;
         _feeBps = newBps_;
+        emit FeeBpsSet(prev, newBps_, block.number);
+    }
+
+    function setAnalystWhitelist(address analyst_, bool allowed_) external onlyGuardian {
+        _analystWhitelist[analyst_] = allowed_;
+        emit AnalystWhitelistSet(analyst_, allowed_, block.number);
+    }
+
+    function setAnalystWhitelistBatch(address[] calldata analysts_, bool[] calldata allowed_) external onlyGuardian {
+        uint256 n = analysts_.length;
+        if (n != allowed_.length) revert J0R_ArrayLengthMismatch();
+        for (uint256 i; i < n; ) {
+            _analystWhitelist[analysts_[i]] = allowed_[i];
+            emit AnalystWhitelistSet(analysts_[i], allowed_[i], block.number);
+            unchecked { ++i; }
+        }
+    }
+
+    function updateBand(uint256 bandId_, uint256 lowerBps_, uint256 upperBps_, bool active_) external onlyGuardian {
+        if (_bands[bandId_].registeredAtBlock == 0) revert J0R_BandNotFound();
+        if (lowerBps_ >= upperBps_) revert J0R_BandBoundsInvalid();
+        _bands[bandId_].lowerBps = lowerBps_;
+        _bands[bandId_].upperBps = upperBps_;
+        _bands[bandId_].active = active_;
+        _appendBandHistory(bandId_, lowerBps_, upperBps_, active_);
+        emit BandUpdated(bandId_, lowerBps_, upperBps_, active_, block.number);
+    }
+
+    // -------------------------------------------------------------------------
+    // EXTERNAL — ANALYST (TERMINAL)
+    // -------------------------------------------------------------------------
+
+    function openTerminalSession() external onlyAnalyst whenNotPausedContract returns (uint256 sessionId) {
+        _sessionCount++;
+        sessionId = _sessionCount;
+        uint256 expiry = block.number + SESSION_DURATION_BLOCKS;
+        _sessions[sessionId] = TerminalSession({
+            analyst: msg.sender,
+            openedAtBlock: block.number,
+            expiryBlock: expiry,
+            closed: false
+        });
+        emit TerminalSessionOpened(sessionId, msg.sender, expiry, block.number);
+    }
+
+    function closeTerminalSession(uint256 sessionId_) external {
+        TerminalSession storage s = _sessions[sessionId_];
+        if (s.openedAtBlock == 0) revert J0R_SessionNotOpen();
+        if (s.analyst != msg.sender && owner() != msg.sender) revert J0R_NotAnalyst();
+        if (s.closed) revert J0R_SessionNotOpen();
+        s.closed = true;
+        emit TerminalSessionClosed(sessionId_, block.number);
+    }
+
+    function castVote(uint256 sessionId_, uint8 direction_, uint256 bandId_) external onlyAnalyst whenNotPausedContract {
+        TerminalSession storage s = _sessions[sessionId_];
+        if (s.openedAtBlock == 0) revert J0R_SessionNotOpen();
+        if (s.analyst != msg.sender) revert J0R_NotAnalyst();
+        if (s.closed) revert J0R_SessionNotOpen();
+        if (block.number > s.expiryBlock) revert J0R_SessionExpired();
+        if (direction_ > VOTE_DIRECTION_DOWN) revert J0R_DirectionInvalid();
+        if (_bands[bandId_].registeredAtBlock == 0 || !_bands[bandId_].active) revert J0R_BandNotFound();
+        _sessionVotes[sessionId_][msg.sender] = AnalystVote({
+            direction: direction_,
+            bandId: bandId_,
+            atBlock: block.number
+        });
+        emit AnalystVoteRecorded(sessionId_, msg.sender, direction_, bandId_, block.number);
+    }
+
