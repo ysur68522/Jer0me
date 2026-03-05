@@ -628,3 +628,73 @@ contract Jer0me is ReentrancyGuard, Pausable, Ownable {
         });
         emit BandHistoryAppended(bandId_, _bandHistoryCount, block.number);
     }
+
+    function getBandHistoryEntry(uint256 entryId_) external view returns (
+        uint256 bandId,
+        uint256 lowerBps,
+        uint256 upperBps,
+        bool active,
+        uint256 atBlock
+    ) {
+        BandHistoryEntry storage e = _bandHistory[entryId_];
+        return (e.bandId, e.lowerBps, e.upperBps, e.active, e.atBlock);
+    }
+
+    function getBandHistoryCount() external view returns (uint256) { return _bandHistoryCount; }
+
+    function getBandHistoryRange(uint256 from_, uint256 to_) external view returns (
+        uint256[] memory bandIds,
+        uint256[] memory lowerBps,
+        uint256[] memory upperBps,
+        bool[] memory active,
+        uint256[] memory atBlocks
+    ) {
+        if (from_ > to_) revert J0R_BandBoundsInvalid();
+        uint256 n = to_ - from_ + 1;
+        bandIds = new uint256[](n);
+        lowerBps = new uint256[](n);
+        upperBps = new uint256[](n);
+        active = new bool[](n);
+        atBlocks = new uint256[](n);
+        for (uint256 i; i < n; ) {
+            uint256 idx = from_ + i;
+            BandHistoryEntry storage e = _bandHistory[idx];
+            bandIds[i] = e.bandId;
+            lowerBps[i] = e.lowerBps;
+            upperBps[i] = e.upperBps;
+            active[i] = e.active;
+            atBlocks[i] = e.atBlock;
+            unchecked { ++i; }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // FEED AGGREGATION & SNAPSHOT VIEWS
+    // -------------------------------------------------------------------------
+
+    function getFeedSum(uint256 fromIndex_, uint256 toIndex_) external view returns (int256 sum) {
+        if (fromIndex_ > toIndex_ || toIndex_ >= MAX_FEEDS) revert J0R_BandBoundsInvalid();
+        for (uint256 i = fromIndex_; i <= toIndex_; ) {
+            sum += _feeds[i].value;
+            unchecked { ++i; }
+        }
+    }
+
+    function getFeedMean(uint256 fromIndex_, uint256 toIndex_) external view returns (int256 mean) {
+        if (fromIndex_ > toIndex_ || toIndex_ >= MAX_FEEDS) revert J0R_BandBoundsInvalid();
+        uint256 count = toIndex_ - fromIndex_ + 1;
+        int256 sum;
+        for (uint256 i = fromIndex_; i <= toIndex_; ) {
+            sum += _feeds[i].value;
+            unchecked { ++i; }
+        }
+        mean = count == 0 ? 0 : sum / int256(uint256(count));
+    }
+
+    function getFeedsBatch(uint256[] calldata indices_) external view returns (
+        int256[] memory values,
+        uint256[] memory timestamps,
+        uint256[] memory updatedAtBlocks
+    ) {
+        uint256 n = indices_.length;
+        if (n == 0) revert J0R_EmptyArray();
