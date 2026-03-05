@@ -488,3 +488,73 @@ contract Jer0me is ReentrancyGuard, Pausable, Ownable {
         for (uint256 i; i < n; ) {
             uint256 id = fromId_ + i;
             RateBand storage b = _bands[id];
+            ids[i] = id;
+            tags[i] = b.bandTag;
+            lowerBps[i] = b.lowerBps;
+            upperBps[i] = b.upperBps;
+            active[i] = b.active;
+            unchecked { ++i; }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // VIEW — SESSIONS & VOTES
+    // -------------------------------------------------------------------------
+
+    function getSession(uint256 sessionId_) external view returns (
+        address analyst,
+        uint256 openedAtBlock,
+        uint256 expiryBlock,
+        bool closed
+    ) {
+        TerminalSession storage s = _sessions[sessionId_];
+        if (s.openedAtBlock == 0) revert J0R_SessionNotOpen();
+        return (s.analyst, s.openedAtBlock, s.expiryBlock, s.closed);
+    }
+
+    function getSessionCount() external view returns (uint256) { return _sessionCount; }
+
+    function getVote(uint256 sessionId_, address analyst_) external view returns (
+        uint8 direction,
+        uint256 bandId,
+        uint256 atBlock
+    ) {
+        AnalystVote storage v = _sessionVotes[sessionId_][analyst_];
+        return (v.direction, v.bandId, v.atBlock);
+    }
+
+    function isSessionOpen(uint256 sessionId_) external view returns (bool) {
+        TerminalSession storage s = _sessions[sessionId_];
+        return s.openedAtBlock != 0 && !s.closed && block.number <= s.expiryBlock;
+    }
+
+    function isAnalystWhitelisted(address account_) external view returns (bool) {
+        return _analystWhitelist[account_];
+    }
+
+    // -------------------------------------------------------------------------
+    // VIEW — FEEDS & CONFIG
+    // -------------------------------------------------------------------------
+
+    function getFeed(uint256 feedIndex_) external view returns (int256 value, uint256 timestamp, uint256 updatedAtBlock) {
+        if (feedIndex_ >= MAX_FEEDS) revert J0R_CapExceeded();
+        FeedSlot storage f = _feeds[feedIndex_];
+        return (f.value, f.timestamp, f.updatedAtBlock);
+    }
+
+    function getFeedStale(uint256 feedIndex_) external view returns (bool) {
+        if (feedIndex_ >= MAX_FEEDS) return true;
+        FeedSlot storage f = _feeds[feedIndex_];
+        if (f.updatedAtBlock == 0) return true;
+        return block.number > f.updatedAtBlock + _staleWindowBlocks;
+    }
+
+    function currentEpoch() external view returns (uint256) { return _currentEpoch; }
+
+    function epochStartBlock(uint256 epoch_) external view returns (uint256) { return _epochStartBlock[epoch_]; }
+
+    function staleWindowBlocks() external view returns (uint256) { return _staleWindowBlocks; }
+
+    function feeBps() external view returns (uint256) { return _feeBps; }
+
+    function resolveBandForBps(uint256 bps_) external view returns (uint256 bandId, bool found) {
