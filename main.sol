@@ -418,3 +418,73 @@ contract Jer0me is ReentrancyGuard, Pausable, Ownable {
         emit AnalystVoteRecorded(sessionId_, msg.sender, direction_, bandId_, block.number);
     }
 
+    // -------------------------------------------------------------------------
+    // EXTERNAL — OWNER
+    // -------------------------------------------------------------------------
+
+    function sweepToken(address token_, address to_, uint256 amount_) external onlyOwner nonReentrantGuard {
+        if (to_ == address(0)) revert J0R_ZeroAddress();
+        if (amount_ == 0) revert J0R_ZeroAmount();
+        bool ok = IERC20Jer0me(token_).transfer(to_, amount_);
+        if (!ok) revert J0R_TransferFailed();
+        emit TreasurySweep(token_, to_, amount_, block.number);
+    }
+
+    function sweepNative(address payable to_, uint256 amount_) external onlyOwner nonReentrantGuard {
+        if (to_ == address(0)) revert J0R_ZeroAddress();
+        (bool sent,) = to_.call{value: amount_}("");
+        if (!sent) revert J0R_TransferFailed();
+    }
+
+    receive() external payable {}
+
+    // -------------------------------------------------------------------------
+    // VIEW — BANDS & SIGNALS
+    // -------------------------------------------------------------------------
+
+    function getBand(uint256 bandId_) external view returns (
+        bytes32 bandTag,
+        uint256 lowerBps,
+        uint256 upperBps,
+        uint256 policyEpoch,
+        uint256 registeredAtBlock,
+        bool active
+    ) {
+        RateBand storage b = _bands[bandId_];
+        if (b.registeredAtBlock == 0) revert J0R_BandNotFound();
+        return (b.bandTag, b.lowerBps, b.upperBps, b.policyEpoch, b.registeredAtBlock, b.active);
+    }
+
+    function getBandCount() external view returns (uint256) { return _bandCount; }
+
+    function getBandCap() external view returns (uint256) { return _bandCap; }
+
+    function getSignal(uint256 signalId_) external view returns (
+        bytes32 signalHash,
+        uint256 epoch,
+        address relayer,
+        uint256 atBlock
+    ) {
+        PolicySignal storage s = _signals[signalId_];
+        return (s.signalHash, s.epoch, s.relayer, s.atBlock);
+    }
+
+    function getSignalCount() external view returns (uint256) { return _signalCount; }
+
+    function getBandsBatch(uint256 fromId_, uint256 toId_) external view returns (
+        uint256[] memory ids,
+        bytes32[] memory tags,
+        uint256[] memory lowerBps,
+        uint256[] memory upperBps,
+        bool[] memory active
+    ) {
+        if (fromId_ > toId_) revert J0R_BandBoundsInvalid();
+        uint256 n = toId_ - fromId_ + 1;
+        ids = new uint256[](n);
+        tags = new bytes32[](n);
+        lowerBps = new uint256[](n);
+        upperBps = new uint256[](n);
+        active = new bool[](n);
+        for (uint256 i; i < n; ) {
+            uint256 id = fromId_ + i;
+            RateBand storage b = _bands[id];
