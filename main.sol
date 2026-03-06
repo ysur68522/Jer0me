@@ -698,3 +698,73 @@ contract Jer0me is ReentrancyGuard, Pausable, Ownable {
     ) {
         uint256 n = indices_.length;
         if (n == 0) revert J0R_EmptyArray();
+        values = new int256[](n);
+        timestamps = new uint256[](n);
+        updatedAtBlocks = new uint256[](n);
+        for (uint256 i; i < n; ) {
+            uint256 idx = indices_[i];
+            if (idx >= MAX_FEEDS) revert J0R_CapExceeded();
+            FeedSlot storage f = _feeds[idx];
+            values[i] = f.value;
+            timestamps[i] = f.timestamp;
+            updatedAtBlocks[i] = f.updatedAtBlock;
+            unchecked { ++i; }
+        }
+    }
+
+    function getSignalsBatch(uint256 fromId_, uint256 toId_) external view returns (
+        uint256[] memory ids,
+        bytes32[] memory hashes,
+        uint256[] memory epochs,
+        uint256[] memory atBlocks
+    ) {
+        if (fromId_ > toId_) revert J0R_BandBoundsInvalid();
+        uint256 n = toId_ - fromId_ + 1;
+        ids = new uint256[](n);
+        hashes = new bytes32[](n);
+        epochs = new uint256[](n);
+        atBlocks = new uint256[](n);
+        for (uint256 i; i < n; ) {
+            uint256 id = fromId_ + i;
+            PolicySignal storage s = _signals[id];
+            ids[i] = id;
+            hashes[i] = s.signalHash;
+            epochs[i] = s.epoch;
+            atBlocks[i] = s.atBlock;
+            unchecked { ++i; }
+        }
+    }
+
+    function getSessionsBatch(uint256 fromId_, uint256 toId_) external view returns (
+        uint256[] memory ids,
+        address[] memory analysts,
+        uint256[] memory openedAtBlocks,
+        uint256[] memory expiryBlocks,
+        bool[] memory closed
+    ) {
+        if (fromId_ > toId_) revert J0R_BandBoundsInvalid();
+        uint256 n = toId_ - fromId_ + 1;
+        ids = new uint256[](n);
+        analysts = new address[](n);
+        openedAtBlocks = new uint256[](n);
+        expiryBlocks = new uint256[](n);
+        closed = new bool[](n);
+        for (uint256 i; i < n; ) {
+            uint256 id = fromId_ + i;
+            TerminalSession storage s = _sessions[id];
+            ids[i] = id;
+            analysts[i] = s.analyst;
+            openedAtBlocks[i] = s.openedAtBlock;
+            expiryBlocks[i] = s.expiryBlock;
+            closed[i] = s.closed;
+            unchecked { ++i; }
+        }
+    }
+
+    function countActiveBands() external view returns (uint256 count) {
+        for (uint256 i = 1; i <= _bandCount; ) {
+            if (_bands[i].active) count++;
+            unchecked { ++i; }
+        }
+    }
+
