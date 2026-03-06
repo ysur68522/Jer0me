@@ -768,3 +768,73 @@ contract Jer0me is ReentrancyGuard, Pausable, Ownable {
         }
     }
 
+    function countSignalsInEpoch(uint256 epoch_) external view returns (uint256 count) {
+        for (uint256 i = 1; i <= _signalCount; ) {
+            if (_signals[i].epoch == epoch_) count++;
+            unchecked { ++i; }
+        }
+    }
+
+    function countOpenSessions() external view returns (uint256 count) {
+        for (uint256 i = 1; i <= _sessionCount; ) {
+            TerminalSession storage s = _sessions[i];
+            if (s.openedAtBlock != 0 && !s.closed && block.number <= s.expiryBlock) count++;
+            unchecked { ++i; }
+        }
+    }
+
+    function getEpochStats(uint256 epoch_) external view returns (
+        uint256 signalCount,
+        uint256 startBlock,
+        uint256 endBlock
+    ) {
+        startBlock = _epochStartBlock[epoch_];
+        endBlock = epoch_ + 1 <= _currentEpoch ? _epochStartBlock[epoch_ + 1] - 1 : block.number;
+        for (uint256 i = 1; i <= _signalCount; ) {
+            if (_signals[i].epoch == epoch_) signalCount++;
+            unchecked { ++i; }
+        }
+    }
+
+    function bandTagExists(bytes32 tag_) external view returns (bool) {
+        for (uint256 i = 1; i <= _bandCount; ) {
+            if (_bands[i].bandTag == tag_) return true;
+            unchecked { ++i; }
+        }
+        return false;
+    }
+
+    function getBandIdByTag(bytes32 tag_) external view returns (uint256 bandId, bool found) {
+        for (uint256 i = 1; i <= _bandCount; ) {
+            if (_bands[i].bandTag == tag_) return (i, true);
+            unchecked { ++i; }
+        }
+        return (0, false);
+    }
+
+    function getConfigSnapshot() external view returns (
+        uint256 bandCap,
+        uint256 bandCount,
+        uint256 currentEpoch_,
+        uint256 staleWindowBlocks_,
+        uint256 feeBps_,
+        bool paused_
+    ) {
+        return (
+            _bandCap,
+            _bandCount,
+            _currentEpoch,
+            _staleWindowBlocks,
+            _feeBps,
+            paused()
+        );
+    }
+
+    function getRoleAddresses() external view returns (
+        address relay_,
+        address guardian_,
+        address treasury_,
+        address fallbackReceiver_
+    ) {
+        return (relay, guardian, treasury, fallbackReceiver);
+    }
