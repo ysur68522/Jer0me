@@ -908,3 +908,65 @@ contract Jer0me is ReentrancyGuard, Pausable, Ownable {
         return _sessions[sessionId_].expiryBlock;
     }
 
+    function blocksUntilSessionExpiry(uint256 sessionId_) external view returns (uint256) {
+        TerminalSession storage s = _sessions[sessionId_];
+        if (s.openedAtBlock == 0 || s.closed) return 0;
+        if (block.number >= s.expiryBlock) return 0;
+        return s.expiryBlock - block.number;
+    }
+
+    function blocksSinceEpochStart(uint256 epoch_) external view returns (uint256) {
+        uint256 start = _epochStartBlock[epoch_];
+        if (start == 0) return 0;
+        return block.number - start;
+    }
+
+    function isEpochCurrent(uint256 epoch_) external view returns (bool) {
+        return epoch_ == _currentEpoch;
+    }
+
+    function maxBands() external pure returns (uint256) { return MAX_BANDS_DEFAULT; }
+
+    function voteDirectionHold() external pure returns (uint256) { return VOTE_DIRECTION_HOLD; }
+
+    function voteDirectionUp() external pure returns (uint256) { return VOTE_DIRECTION_UP; }
+
+    function voteDirectionDown() external pure returns (uint256) { return VOTE_DIRECTION_DOWN; }
+
+    function sessionDurationBlocks() external pure returns (uint256) { return SESSION_DURATION_BLOCKS; }
+
+    function epochBlocks() external pure returns (uint256) { return EPOCH_BLOCKS; }
+
+    function bpsDenominator() external pure returns (uint256) { return BPS_DENOMINATOR; }
+
+    function maxFeeBps() external pure returns (uint256) { return MAX_FEE_BPS; }
+
+    function maxStaleBlocks() external pure returns (uint256) { return MAX_STALE_BLOCKS; }
+
+    function batchResolveBandsForBps(uint256[] calldata bpsList_) external view returns (uint256[] memory bandIds_) {
+        uint256 n = bpsList_.length;
+        bandIds_ = new uint256[](n);
+        for (uint256 j; j < n; ) {
+            uint256 bps = bpsList_[j];
+            for (uint256 i = 1; i <= _bandCount; ) {
+                RateBand storage b = _bands[i];
+                if (b.active && bps >= b.lowerBps && bps <= b.upperBps) {
+                    bandIds_[j] = i;
+                    break;
+                }
+                unchecked { ++i; }
+            }
+            unchecked { ++j; }
+        }
+    }
+
+    function hasActiveBandAtBps(uint256 bps_) external view returns (bool) {
+        for (uint256 i = 1; i <= _bandCount; ) {
+            RateBand storage b = _bands[i];
+            if (b.active && bps_ >= b.lowerBps && bps_ <= b.upperBps) return true;
+            unchecked { ++i; }
+        }
+        return false;
+    }
+
+}
