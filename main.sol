@@ -838,3 +838,73 @@ contract Jer0me is ReentrancyGuard, Pausable, Ownable {
     ) {
         return (relay, guardian, treasury, fallbackReceiver);
     }
+
+    function computeFeeForAmount(uint256 amount_) public view returns (uint256 fee, uint256 net) {
+        fee = (amount_ * _feeBps) / BPS_DENOMINATOR;
+        net = amount_ - fee;
+    }
+
+    function isFeedStaleAtBlock(uint256 feedIndex_, uint256 atBlock_) external view returns (bool) {
+        if (feedIndex_ >= MAX_FEEDS) return true;
+        FeedSlot storage f = _feeds[feedIndex_];
+        if (f.updatedAtBlock == 0) return true;
+        return atBlock_ > f.updatedAtBlock + _staleWindowBlocks;
+    }
+
+    function getLastSignalForEpoch(uint256 epoch_) external view returns (
+        uint256 signalId,
+        bytes32 signalHash,
+        uint256 atBlock,
+        bool found
+    ) {
+        for (uint256 i = _signalCount; i >= 1; ) {
+            if (_signals[i].epoch == epoch_) {
+                PolicySignal storage s = _signals[i];
+                return (i, s.signalHash, s.atBlock, true);
+            }
+            unchecked { --i; }
+        }
+        return (0, bytes32(0), 0, false);
+    }
+
+    function getSessionVotesCount(uint256 sessionId_) external view returns (uint256) {
+        if (_sessions[sessionId_].openedAtBlock == 0) revert J0R_SessionNotOpen();
+        return 1;
+    }
+
+    function supportsEIP165() external pure returns (bool) { return true; }
+
+    function getBandLowerBound(uint256 bandId_) external view returns (uint256) {
+        if (_bands[bandId_].registeredAtBlock == 0) revert J0R_BandNotFound();
+        return _bands[bandId_].lowerBps;
+    }
+
+    function getBandUpperBound(uint256 bandId_) external view returns (uint256) {
+        if (_bands[bandId_].registeredAtBlock == 0) revert J0R_BandNotFound();
+        return _bands[bandId_].upperBps;
+    }
+
+    function getBandEpoch(uint256 bandId_) external view returns (uint256) {
+        if (_bands[bandId_].registeredAtBlock == 0) revert J0R_BandNotFound();
+        return _bands[bandId_].policyEpoch;
+    }
+
+    function getBandTag(uint256 bandId_) external view returns (bytes32) {
+        if (_bands[bandId_].registeredAtBlock == 0) revert J0R_BandNotFound();
+        return _bands[bandId_].bandTag;
+    }
+
+    function getSignalRelayer(uint256 signalId_) external view returns (address) {
+        return _signals[signalId_].relayer;
+    }
+
+    function getSessionAnalyst(uint256 sessionId_) external view returns (address) {
+        if (_sessions[sessionId_].openedAtBlock == 0) revert J0R_SessionNotOpen();
+        return _sessions[sessionId_].analyst;
+    }
+
+    function getSessionExpiry(uint256 sessionId_) external view returns (uint256) {
+        if (_sessions[sessionId_].openedAtBlock == 0) revert J0R_SessionNotOpen();
+        return _sessions[sessionId_].expiryBlock;
+    }
+
